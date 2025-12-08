@@ -1,0 +1,143 @@
+\section{System Implementation}
+
+\subsection{The Multi-Threaded Pipeline Architecture}
+To achieve high-performance video streaming, a sequential "read-process-display" loop is insufficient. In a single-threaded approach, the frame rate is limited by the sum of the execution times of all stages:
+\[ T_{total} = T_{capture} + T_{process} + T_{display} \]
+\[ FPS = \frac{1}{T_{total}} \]
+
+To overcome this, we implemented a \textbf{Producer-Consumer} architecture using Python's \texttt{threading} module. This decouples the stages, allowing them to operate in parallel. The pipeline consists of three daemon threads connected by thread-safe \texttt{queue.Queue} objects.
+
+\textbf{The Three Stages:}
+\begin{enumerate}
+    \item \textbf{Capture Thread (Producer):} Continuously polls the camera driver.
+    \item \textbf{Processing Thread (Worker):} Consumes raw frames, runs the CV algorithm, and produces annotated frames.
+    \item \textbf{Display Thread (Consumer):} Consumes annotated frames and pushes them to the HDMI buffer.
+\end{enumerate}
+
+\subsection{Thread 1: Frame Capture}
+The capture thread's sole responsibility is to get data out of the USB controller as fast as possible.
+
+\textbf{Logic:}
+\begin{enumerate}
+    \item Initialize \texttt{cv2.VideoCapture}.
+    \item Enter infinite loop.
+    \item Call \texttt{cap.read()}. This is a blocking call that waits for the next USB packet.
+    \item Check if the frame is valid.
+    \item Push the frame to \texttt{frame\_queue}.
+    \item \textbf{Critical Optimization:} If \texttt{frame\_queue} is full, we catch the \texttt{queue.Full} exception and increment a \texttt{dropped\_frames} counter. We do \textit{not} block. This ensures that if the processing thread falls behind, the capture thread keeps clearing the camera's hardware buffer, preventing "stale" frames from building up.
+\end{enumerate}
+
+\subsection{Thread 2: The Processing Unit}
+This thread performs the heavy lifting. To maintain high FPS, we employ a "Process Low, Display High" strategy.
+
+\textbf{Logic:}
+\begin{enumerate}
+    \item Pop a frame from \texttt{frame\_queue} (with timeout).
+    \item \textbf{Downscaling:} Resize the 1280x720 input frame to a smaller resolution (e.g., 384x216) using \texttt{cv2.resize()}. This reduces the pixel count by ~90\%, significantly speeding up the subsequent motion detection steps.
+    \item \textbf{Algorithm Execution:} Run the motion detection on the small frame (detailed in Chapter 5).
+    \item \textbf{Coordinate Scaling:} The algorithm returns bounding boxes in the 384x216 coordinate space. We multiply these coordinates by the inverse scale factor (approx 3.33x) to map them back to the original 720p resolution.
+    \item Push the original (high-res) frame and the scaled bounding boxes to \texttt{result\_queue}.
+\end{enumerate}
+
+\subsection{Thread 3: Display and Visualization}
+The display thread handles the final output and user interface.
+
+\textbf{Logic:}
+\begin{enumerate}
+    \item Pop data (frame + boxes) from \texttt{result\_queue}.
+    \item \textbf{Visualization:} Draw the bounding boxes on the high-res frame using \texttt{cv2.rectangle}.
+    \item \textbf{OSD Overlay:} Calculate FPS statistics and draw them using \texttt{cv2.putText}.
+    \item \textbf{Color Conversion:} Convert the BGR frame to RGB.
+    \item \textbf{DMA Transfer:} Copy the RGB data into the PYNQ HDMI buffer (\texttt{hdmi\_buffer[:] = frame\_rgb}).
+    \item \textbf{Commit:} Call \texttt{hdmi\_out.writeframe(hdmi\_buffer)} to flip the video buffers.
+\end{enumerate}
+
+\subsection{Synchronization and Queue Management}
+We use \texttt{queue.Queue} with a \texttt{maxsize=2}.
+\begin{itemize}
+    \item \textbf{Why 2?} A size of 1 would cause too much lock contention. A large size (e.g., 30) would introduce latency (lag). If the queue holds 30 frames, the image you see on screen is 1 second old (at 30 FPS).
+    \item \textbf{Latency Control:} With a queue size of 2, the maximum latency introduced by buffering is minimal (approx 66ms), ensuring the system feels responsive.
+\end{itemize}
+
+\section{Motion Detection Algorithm}
+
+\subsection{Algorithm Selection}
+For an embedded system, we need an algorithm that is robust yet computationally inexpensive. We selected \textbf{Frame Differencing} over more complex methods like Gaussian Mixture Models (MOG2) or Deep Learning.
+\begin{itemize}
+    \item \textbf{Pros:} Extremely fast (simple subtraction), low memory footprint.
+    \item \textbf{Cons:} Sensitive to lighting changes, requires a stationary camera.
+\end{itemize}
+
+\subsection{Implementation Logic}
+The algorithm processes the downscaled video stream in the following steps:
+
+\begin{enumerate}
+    \item \textbf{Preprocessing:}
+    \begin{itemize}
+        \item Convert the current frame to Grayscale. Color information is unnecessary for motion.
+        \item Apply a \textbf{Gaussian Blur} (kernel size 21x21). This is critical. It smooths out sensor noise and small vibrations, preventing false positives.
+    \end{itemize}
+
+    \item \textbf{Differencing:}
+    \begin{itemize}
+        \item Compute the absolute difference between the \textit{current} blurred frame and the \textit{previous} blurred frame: \texttt{diff = |Current - Previous|}.
+    \end{itemize}
+
+    \item \textbf{Thresholding:}
+    \begin{itemize}
+        \item Apply a binary threshold. Any pixel with a difference value > 25 (on a scale of 0-255) is marked as "Motion" (white), others as "Background" (black).
+    \end{itemize}
+
+    \item \textbf{Morphological Operations:}
+    \begin{itemize}
+        \item \textbf{Dilate:} Expand the white regions. This fills in holes within moving objects (e.g., a moving person might have holes in the mask where their clothing matches the background color).
+    \end{itemize}
+
+    \item \textbf{Contour Detection:}
+    \begin{itemize}
+        \item Find contours in the binary mask.
+        \item Filter contours by area. If \texttt{area < 500 pixels}, ignore it (noise).
+        \item Compute the Bounding Box \texttt{(x, y, w, h)} for valid contours.
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Pseudo-Code}
+
+\begin{minted}{python}
+# Initialize
+prev_frame = None
+min_area = 500
+
+while True:
+    frame = get_frame()
+    small_frame = resize(frame, 0.25) # Downscale
+    gray = to_gray(small_frame)
+    blur = gaussian_blur(gray, (21, 21))
+
+    if prev_frame is None:
+        prev_frame = blur
+        continue
+
+    # Compute Difference
+    delta = abs_diff(prev_frame, blur)
+    
+    # Thresholding
+    thresh = threshold(delta, 25, 255)
+    
+    # Dilate to fill holes
+    thresh = dilate(thresh, iterations=2)
+    
+    # Find Contours
+    contours = find_contours(thresh)
+    
+    motion_boxes = []
+    for c in contours:
+        if area(c) > min_area:
+            box = bounding_rect(c)
+            # Scale box back to original resolution
+            original_box = box * 4 
+            motion_boxes.append(original_box)
+
+    prev_frame = blur
+    return motion_boxes
+\end{minted}

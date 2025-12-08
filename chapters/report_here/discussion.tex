@@ -1,0 +1,45 @@
+\section{Challenges and Solutions}
+
+\subsection{Color Space Mismatch}
+\textbf{Issue:} Initial tests showed the video output with swapped Red and Blue channels (people looked blue/smurfs).
+\textbf{Root Cause:} OpenCV uses BGR (Blue-Green-Red) format by default, while the HDMI hardware expects RGB.
+\textbf{Solution:} We implemented a \texttt{cv2.cvtColor(frame, cv2.COLOR\_BGR2RGB)} step in the Display Thread immediately before writing to the HDMI buffer. This fixed the colors with negligible performance impact.
+
+\subsection{USB Bandwidth Limitations}
+\textbf{Issue:} When attempting 1080p streaming with the default YUYV format, the frame rate dropped to 5 FPS.
+\textbf{Root Cause:} Uncompressed YUYV video at 1080p requires ~3Gbps bandwidth, exceeding USB 2.0's 480Mbps limit.
+\textbf{Solution:} We forced the camera to use \textbf{MJPEG} compression. This reduces the bandwidth requirement significantly, allowing 30 FPS at 1080p.
+
+\subsection{Latency Accumulation}
+\textbf{Issue:} Over time, the displayed video would start to lag behind reality by several seconds.
+\textbf{Root Cause:} The processing thread was slightly slower than the capture thread. The queue would fill up, and the capture thread would block, waiting for space. This created a backlog of old frames.
+\textbf{Solution:} We implemented a \textbf{non-blocking capture} strategy. If the queue is full, the capture thread drops the current frame and continues. This ensures that whenever the processor is ready, it always gets the \textit{newest} available frame, keeping latency constant and low.
+
+\section{Future Enhancements}
+
+\subsection{RISC-V Integration}
+One of the original goals was to integrate a RISC-V soft-core (like PicoRV32 or Ibex) into the FPGA fabric. While not completed in this phase due to time constraints, the architecture is ready for it.
+\begin{itemize}
+    \item \textbf{Plan:} Instantiate a PicoRV32 core in the PL.
+    \item \textbf{Function:} Offload the "Motion Detection" logic from the ARM PS to the RISC-V core.
+    \item \textbf{Interface:} Use AXI4-Lite or Shared BRAM to transfer downscaled frames to the RISC-V core and receive bounding box coordinates back. This would demonstrate true heterogeneous computing.
+\end{itemize}
+
+\subsection{Hardware Acceleration (HLS)}
+Currently, \texttt{cv2.absdiff} runs on the ARM CPU. Using Xilinx Vitis HLS (High-Level Synthesis), we could write a C++ function for frame differencing and synthesize it into a hardware IP block. This would free up the CPU entirely for higher-level logic.
+
+\subsection{Network Streaming}
+The Arty Z7 has a Gigabit Ethernet port. We could extend the pipeline to stream the processed video over the network (RTSP/UDP) to a remote PC, turning the board into a smart IP camera.
+
+\section{Conclusion}
+
+This project successfully demonstrated the design of a real-time embedded vision system on the Arty Z7 platform. By carefully architecting a multi-threaded software pipeline and leveraging the hardware capabilities of the Zynq SoC, we achieved high-definition video streaming and motion detection with low latency.
+
+The system meets all core requirements:
+\begin{itemize}
+    \item \textbf{USB to HDMI:} Functional at 720p and 1080p.
+    \item \textbf{Performance:} Stable 30 FPS (720p) and 25 FPS (1080p).
+    \item \textbf{Intelligence:} Integrated motion detection.
+\end{itemize}
+
+The challenges overcome---specifically regarding color spaces, bandwidth, and synchronization---provided valuable insights into the complexities of embedded systems. The modular design lays a strong foundation for future work, particularly in the exciting direction of RISC-V and hardware acceleration.

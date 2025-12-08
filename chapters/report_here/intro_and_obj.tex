@@ -1,0 +1,52 @@
+\section{Introduction}
+
+\subsection{Project Context}
+The "Eye on Intelligence" challenge invites developers to explore the potential of edge AI and embedded vision using the Zynq-7000 SoC. In an era where smart cameras and IoT devices are ubiquitous, the ability to process video data locally---at the "edge"---is critical for reducing bandwidth usage, ensuring privacy, and minimizing latency. The Arty Z7, with its combination of ARM Cortex-A9 processors and Artix-7 FPGA fabric, represents an ideal platform for prototyping such systems.
+
+This project focuses on the fundamental building block of any vision system: the video pipeline. Before complex AI models can be deployed, a robust system must be in place to acquire, buffer, process, and display video frames reliably. This report documents the journey of building that foundation and extending it with functional motion detection capabilities.
+
+\subsection{Problem Statement}
+Developing video processing systems on embedded hardware presents unique challenges compared to desktop environments. Resources are constrained:
+\begin{itemize}
+    \item \textbf{Processing Power:} The ARM Cortex-A9 cores are capable but significantly slower than modern desktop CPUs.
+    \item \textbf{Memory Bandwidth:} Shared DDR3 memory must service the CPU, FPGA logic, and video frame buffers simultaneously.
+    \item \textbf{Thermal Constraints:} Passive cooling limits the sustained computational load.
+\end{itemize}
+
+The challenge is to design a software architecture that maximizes throughput without exhausting these resources, ensuring smooth video playback while leaving headroom for image processing algorithms.
+
+\subsection{Project Objectives}
+The project was guided by a set of core requirements and ambitious bonus objectives:
+
+\textbf{Core Requirements:}
+\begin{enumerate}
+    \item \textbf{USB Camera Interface:} Successfully interface with a standard UVC (USB Video Class) webcam.
+    \item \textbf{HDMI Output:} Drive an HDMI monitor directly from the FPGA board.
+    \item \textbf{Pass-through Streaming:} Create a pipeline to display the live camera feed on the monitor.
+\end{enumerate}
+
+\textbf{Bonus Objectives (Achieved):}
+\begin{enumerate}
+    \item \textbf{High Resolution:} Target 720p (1280x720) and 1080p (1920x1080) resolutions.
+    \item \textbf{Computer Vision Integration:} Implement a real-time motion detection algorithm.
+    \item \textbf{Frame Storage:} Design the architecture to support frame capture and storage (implemented in logic).
+    \item \textbf{SoC Utilization:} Leverage the Zynq architecture effectively.
+\end{enumerate}
+
+\textbf{Future Enhancements:}
+\begin{enumerate}
+    \item \textbf{RISC-V Integration:} Explore the integration of soft-core processors (PicoRV32/Ibex) for auxiliary tasks.
+\end{enumerate}
+
+\subsection{Report Structure}
+This report is organized as follows:
+\begin{itemize}
+    \item \textbf{Hardware Architecture} details the Arty Z7 platform and the Vivado hardware design.
+    \item \textbf{Software Environment} describes the PYNQ framework and Linux subsystem.
+    \item \textbf{System Implementation} provides a deep dive into the multi-threaded Python application.
+    \item \textbf{Motion Detection Algorithm} explains the computer vision logic and optimization strategies.
+    \item \textbf{Results and Performance} presents quantitative data on FPS, latency, and resource usage.
+    \item \textbf{Challenges and Solutions} discusses the technical hurdles overcome during development.
+    \item \textbf{Future Work} outlines paths for further development, including RISC-V integration.
+    \item \textbf{Conclusion} summarizes the project achievements.
+\end{itemize}

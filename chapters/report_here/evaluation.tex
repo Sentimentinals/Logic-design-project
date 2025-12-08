@@ -1,0 +1,62 @@
+\section{Results and Performance Analysis}
+
+\subsection{Experimental Setup}
+\begin{itemize}
+    \item \textbf{Hardware:} Arty Z7-20, Ugreen 2K Webcam, Dell 1080p Monitor.
+    \item \textbf{Environment:} Indoor office lighting.
+    \item \textbf{Metrics:} FPS was measured using a rolling average window of 30 frames. Latency was estimated by filming the screen and a stopwatch simultaneously.
+\end{itemize}
+
+\subsection{Performance Metrics}
+
+\subsubsection{Scenario A: 720p Streaming (1280x720)}
+This is the "sweet spot" for the Arty Z7.
+\begin{itemize}
+    \item \textbf{Capture FPS:} 30.0 (Stable). The USB bus handles MJPEG 720p easily.
+    \item \textbf{Processing FPS:} ~29.5. The downscaled motion detection is very fast.
+    \item \textbf{Display FPS:} 30.0. The HDMI output is perfectly synchronized.
+    \item \textbf{CPU Usage:} ~45\% per core.
+    \item \textbf{Latency:} ~80ms.
+\end{itemize}
+
+\subsubsection{Scenario B: 1080p Streaming (1920x1080)}
+Pushing the hardware to its limit.
+\begin{itemize}
+    \item \textbf{Capture FPS:} 28-30. Occasional dips due to USB bandwidth contention.
+    \item \textbf{Processing FPS:} 24-26. The larger frames take longer to resize and convert, even with downscaling.
+    \item \textbf{Display FPS:} 24-26. The pipeline is bottlenecked by the processing stage.
+    \item \textbf{CPU Usage:} ~75\% per core.
+    \item \textbf{Latency:} ~120ms.
+\end{itemize}
+
+\subsection{Visual Results}
+\textit{(Note: Placeholders for screenshots)}
+
+\begin{figure}[H]
+  \centering
+  % \includegraphics[width=0.8\textwidth]{figures/raw_input.png}
+  \caption{Raw input feed showing the office environment.}
+  \label{fig:raw_input}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  % \includegraphics[width=0.8\textwidth]{figures/threshold_view.png}
+  \caption{Threshold view (debug mode) showing motion blobs.}
+  \label{fig:threshold}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  % \includegraphics[width=0.8\textwidth]{figures/final_output.png}
+  \caption{Final HDMI output with Green Bounding Boxes tracking motion.}
+  \label{fig:final_output}
+\end{figure}
+
+\subsection{Stability Analysis}
+The system was left running for 2 hours.
+\begin{itemize}
+    \item \textbf{Memory Leak:} None observed. Python's garbage collector and \texttt{gc.collect()} calls in the code managed memory effectively.
+    \item \textbf{Thermal:} The Zynq SoC remained warm but within safe operating limits without active cooling (heatsink only).
+    \item \textbf{Drift:} No audio/video drift (since there is no audio), and the frame buffer management prevented any permanent lag accumulation.
+\end{itemize}

@@ -1,0 +1,111 @@
+\section{Hardware Architecture}
+
+\subsection{The Arty Z7 Platform}
+The Digilent Arty Z7-20 is the heart of this project. It features the Xilinx Zynq-7000 XC7Z020-1CLG400C SoC, which integrates a dual-core ARM Cortex-A9 Processing System (PS) with Artix-7 Programmable Logic (PL).
+
+\textbf{Key Specifications:}
+\begin{itemize}
+    \item \textbf{Processor:} Dual-core ARM Cortex-A9 @ 650 MHz.
+    \item \textbf{FPGA Logic:} 85,000 logic cells, 53,200 LUTs, 106,400 flip-flops.
+    \item \textbf{Memory:} 512MB DDR3 with 16-bit bus @ 1050 Mbps.
+    \item \textbf{Video Output:} HDMI Sink and Source ports (we utilize the Source/Output).
+    \item \textbf{Connectivity:} USB 2.0 Host (for camera), Gigabit Ethernet, UART.
+\end{itemize}
+
+This heterogeneous architecture allows us to run a full Linux operating system on the PS while offloading high-speed I/O and timing-critical video tasks to the PL.
+
+\subsection{Peripheral Setup}
+The system interacts with two primary external peripherals:
+
+\begin{enumerate}
+    \item \textbf{Input: Ugreen 2K Webcam}
+    \begin{itemize}
+        \item \textbf{Interface:} USB 2.0.
+        \item \textbf{Max Resolution:} 2560x1440 (2K).
+        \item \textbf{Formats:} MJPEG (Compressed), YUYV (Raw).
+        \item \textbf{Role:} The camera acts as the data source. We utilize the MJPEG format to minimize USB bandwidth usage, allowing for higher frame rates at high resolutions compared to raw YUYV.
+    \end{itemize}
+
+    \item \textbf{Output: HDMI Monitor}
+    \begin{itemize}
+        \item \textbf{Interface:} HDMI Type A.
+        \item \textbf{Resolution:} Supports standard 720p60 and 1080p60 timings.
+        \item \textbf{Role:} Displays the processed video feed and the On-Screen Display (OSD) overlay containing performance metrics and detection bounding boxes.
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Programmable Logic (PL) Design}
+The hardware design, created in Xilinx Vivado, provides the necessary infrastructure to drive the HDMI output. While the image processing is currently performed in software on the PS, the PL handles the critical video timing and physical interface.
+
+\textbf{Key Hardware Blocks:}
+\begin{itemize}
+    \item \textbf{Zynq Processing System (IP):} The interface between the ARM cores and the FPGA fabric. It provides AXI ports for data transfer.
+    \item \textbf{AXI VDMA (Video Direct Memory Access):} A crucial component that reads video frames from the DDR3 memory and streams them to the video output pipeline. It acts as the bridge between the software frame buffer and the hardware display logic.
+    \item \textbf{Video Timing Controller (VTC):} Generates the precise horizontal and vertical synchronization signals (HSYNC, VSYNC) required by the HDMI standard for specific resolutions (e.g., 1280x720 @ 60Hz).
+    \item \textbf{AXI4-Stream to Video Out:} Converts the streaming pixel data from the VDMA into parallel video data synchronized with the VTC signals.
+    \item \textbf{HDMI Transmitter (TMDS):} Physical layer logic that drives the HDMI port pins.
+\end{itemize}
+
+\textbf{Data Flow in Hardware:}
+\begin{enumerate}
+    \item Software writes a frame to a specific address in DDR3 RAM.
+    \item AXI VDMA reads this frame data from RAM via the High-Performance (HP) AXI port.
+    \item VDMA streams pixels to the "AXI4-Stream to Video Out" core.
+    \item VTC provides timing signals to the "AXI4-Stream to Video Out" core.
+    \item The combined video signal is sent to the HDMI PHY/Transmitter.
+    \item The image appears on the screen.
+\end{enumerate}
+
+This hardware pipeline runs continuously, independent of the software's processing speed. If the software stops updating the memory buffer, the hardware simply keeps scanning out the last valid frame, ensuring a stable video signal without "blue screen" dropouts.
+
+\section{Software Environment}
+
+\subsection{Operating System: PYNQ Linux}
+The project utilizes the PYNQ (Python Productivity for Zynq) framework version 3.0.1. PYNQ is based on Ubuntu Linux and provides a unique advantage: it exposes hardware overlays (bitstreams) as Python objects.
+
+\textbf{Why PYNQ?}
+\begin{itemize}
+    \item \textbf{Rapid Prototyping:} We can configure hardware IP (like the VDMA and HDMI) using high-level Python APIs instead of writing low-level C drivers.
+    \item \textbf{Ecosystem:} It comes pre-installed with Jupyter Notebooks, allowing for interactive development and visualization.
+    \item \textbf{Libraries:} Full support for standard Python libraries including OpenCV, NumPy, and threading.
+\end{itemize}
+
+\subsection{Video Capture Interface: V4L2}
+To communicate with the USB camera, we utilize the Video4Linux2 (V4L2) API, accessed via OpenCV.
+
+\textbf{Configuration Strategy:}
+\begin{itemize}
+    \item \textbf{Driver:} The standard Linux UVC driver handles the low-level USB communication.
+    \item \textbf{API:} \texttt{cv2.VideoCapture} with the \texttt{cv2.CAP\_V4L2} backend.
+    \item \textbf{Optimization:}
+    \begin{itemize}
+        \item We explicitly request \textbf{MJPEG} format (\texttt{FOURCC='MJPG'}). Raw formats like YUYV consume too much USB bandwidth at 1080p, limiting frame rates to single digits. MJPEG allows us to achieve a stable 30 FPS.
+        \item Buffer size is set to 1 (\texttt{cv2.CAP\_PROP\_BUFFERSIZE}). Standard buffers are often large (3-5 frames) to smooth playback, but for real-time computer vision, this introduces unacceptable latency. We want the \textit{freshest} frame possible, even if it means dropping older ones.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Image Processing Library: OpenCV}
+OpenCV (Open Source Computer Vision Library) is the engine behind our image processing pipeline.
+
+\textbf{Key Functions Used:}
+\begin{itemize}
+    \item \texttt{cv2.resize()}: Downscaling frames for faster processing and upscaling for display.
+    \item \texttt{cv2.cvtColor()}: Converting between color spaces (BGR for processing, RGB for HDMI, Grayscale for motion detection).
+    \item \texttt{cv2.absdiff()}: Computing the difference between frames.
+    \item \texttt{cv2.threshold()} \& \texttt{cv2.findContours()}: Segmenting motion regions.
+    \item \texttt{cv2.rectangle()} \& \texttt{cv2.putText()}: Drawing the UI overlay.
+\end{itemize}
+
+\subsection{Display Interface: PYNQ Video Subsystem}
+The PYNQ library abstracts the complex VDMA and VTC hardware configuration into a simple \texttt{VideoMode} interface.
+
+\begin{minted}{python}
+from pynq.lib.video import VideoMode
+
+# Configure HDMI for 720p
+mode = VideoMode(1280, 720, 24) # Width, Height, Bits per pixel
+hdmi_out.configure(mode)
+hdmi_out.start()
+\end{minted}
+
+This abstraction allows us to switch resolutions dynamically (e.g., between 720p and 1080p) by simply re-initializing the HDMI object with a new mode, making the system highly flexible.

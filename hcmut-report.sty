@@ -1,0 +1,158 @@
+\ProvidesPackage{hcmut-report}
+
+\RequirePackage[utf8]{vntex,inputenc}
+
+\RequirePackage{geometry,graphicx,indentfirst,setspace}
+\RequirePackage{anyfontsize}
+\RequirePackage{booktabs}
+\RequirePackage{fancyhdr,lastpage,hyperref}
+\RequirePackage{tikz}
+\usetikzlibrary{calc}
+
+% Change to '[english,vietnamese]' to use Vietnamese labels
+\RequirePackage[english]{babel}
+
+% Draft watermark
+% https://github.com/callegar/LaTeX-draftwatermark
+
+\newcommand{\Month}{
+  \ifcase \the\month
+  \or January
+  \or February
+  \or March
+  \or April
+  \or May
+  \or June
+  \or July
+  \or August
+  \or September
+  \or October
+  \or November
+  \or December
+  \fi
+}
+
+\newcommand{\@deptname}{Faculty of Computer Science and Engineering}
+\newcommand{\odeptname}[1]{\renewcommand{\@deptname}{#1}}
+
+\newcommand{\@coursename}{Course name}
+\newcommand{\ocoursename}[1]{\renewcommand{\@coursename}{#1}}
+
+\newcommand{\oreporttype}[1]{\renewcommand{\@reporttype}{#1}}
+
+\renewcommand{\@title}{Report title}
+\newcommand{\otitle}[1]{\renewcommand{\@title}{#1}}
+
+\newcommand{\@advisor}{Advisor}
+\newcommand{\oadvisor}[1]{\renewcommand{\@advisor}{#1}}
+
+\newcommand{\@student}{Student Name}
+\newcommand{\ostudent}[1]{\renewcommand{\@student}{#1}}
+
+\newcommand{\@reportplace}{Ho Chi Minh City}
+\newcommand{\oreportplace}[1]{\renewcommand{\@reportplace}{#1}}
+
+\newcommand{\@reporttime}{\Month \the\year}
+\newcommand{\oreporttime}[1]{\renewcommand{\@reporttime}{#1}}
+
+\def\reportlayout{
+  \geometry{
+    a4paper,
+    vmargin=3cm,
+    hmargin=2cm
+  }
+
+  \onehalfspacing%
+
+  % Allow page breaks inside align* environment
+  % \allowdisplaybreaks{}
+
+  % Makes a lot of things blue, avoid at all costs
+  % \everymath{\color{blue}}
+
+  % Table of contents section text
+  % \AtBeginDocument{\renewcommand*\contentsname{Contents}}
+
+  % References section text
+  % \AtBeginDocument{\renewcommand*\refname{References}}
+
+  % Numbering format
+  % {equation}{section} means <section number>.<equation number>
+  % {equation}{subsection} means <section number>.<subsection number>.<equation number>
+  % \numberwithin{equation}{section}
+
+  \hypersetup{
+    colorlinks=true,
+    urlcolor=blue,
+    linkcolor=black,
+    citecolor=red
+  }
+
+  \pagestyle{fancy}
+  \renewcommand{\headrulewidth}{0.3pt}
+  \renewcommand{\footrulewidth}{0.3pt}
+  \setlength{\headheight}{40pt}
+
+  \fancyhead{}
+  \fancyhead[L]{
+    \begin{tabular}{rl}
+      \begin{picture}(25,15)(0,0)
+        \put(0,-8){\includegraphics[width=8mm,height=8mm]{assets/hcmut.png}}
+      \end{picture}
+      \begin{tabular}{l}
+        \textbf{\bf \ttfamily University of Technology, Ho Chi Minh City} \\
+        \textbf{\bf \ttfamily Faculty of Computer Science and Engineering}
+      \end{tabular}
+    \end{tabular}
+  }
+  \fancyhead[R]{
+    \begin{tabular}{l}
+      \tiny \bf \\
+      \tiny \bf
+    \end{tabular}
+  }
+
+  \fancyfoot{}
+  \fancyfoot[L]{\scriptsize \ttfamily \@reporttype}
+  \fancyfoot[R]{\scriptsize \ttfamily Page {\thepage}/\pageref{LastPage}}
+}
+
+\def\coverpage{
+  \thispagestyle{empty}
+  % Decorative Frame
+  \begin{tikzpicture}[remember picture, overlay]
+      \draw[line width = 3pt] ($(current page.north west) + (2cm,-2cm)$) rectangle ($(current page.south east) + (-1.5cm,2cm)$);
+      \draw[line width = 1pt] ($(current page.north west) + (2.15cm,-2.15cm)$) rectangle ($(current page.south east) + (-1.65cm,2.15cm)$);
+  \end{tikzpicture}
+
+  \begin{center}
+    \vspace*{-1cm}
+    \textbf{\large VIET NAM NATIONAL UNIVERSITY HO CHI MINH CITY} \\
+    \textbf{\large HO CHI MINH CITY UNIVERSITY OF TECHNOLOGY} \\
+    \textbf{\large \MakeUppercase{\@deptname}}
+    \\[3cm]
+    \includegraphics[width=0.35\textwidth]{assets/hcmut.png}
+    \\[2cm]
+    \textbf{\Large \@coursename}
+    \\[0.5cm]
+    \textbf{\Large \@reporttype}
+    \\[1cm]
+    \begin{minipage}{0.8\textwidth}
+        \centering
+        \rule{\linewidth}{0.4pt}
+        \vspace{0.5cm}
+        \textbf{\Huge \@title}
+        \vspace{0.5cm}
+        \rule{\linewidth}{0.4pt}
+    \end{minipage}
+    \vfill
+    \begin{tabular}{rl}
+      \textbf{Advisor:} & \@advisor \\
+      \textbf{Student:} & \@student \\
+    \end{tabular}
+    \\[2cm]
+    \textbf{\large \MakeUppercase{\@reportplace, \@reporttime}}
+  \end{center}
+
+  \clearpage
+}

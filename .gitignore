@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+*.pdf
+!report.pdf
